@@ -7,31 +7,32 @@ from navegacao import SITUACOES_ORIGEM, apresentar_etapa, confirmar_salvamento, 
 
 situacoes = SITUACOES_ORIGEM
 dados = apresentar_etapa(1)
-st.caption("Salve antes de voltar, trocar de análise ou navegar para outra página. Alterações não salvas podem ser descartadas.")
-st.caption("Informe a formação anterior do aluno. Não informe aqui o período de encaixe na UNIPAR.")
+st.write("Curso de origem é o curso em que o aluno concluiu ou está cursando as disciplinas que deseja aproveitar.")
+st.caption("O período de ingresso na UNIPAR é informado na etapa anterior.")
 
 with st.form(f"form_origem_{dados[0]}"):
     with st.container(border=True):
-        st.subheader("Origem do Aproveitamento")
         curso_origem = st.text_input(
             "Curso de origem",
             value=dados[10] or "",
             max_chars=150,
+            help="Nome do curso em que o aluno cursou as disciplinas. Exemplo: Administração.",
             key=f"curso_origem_{dados[0]}",
         )
         situacao_atual = dados[4]
         indice_situacao = situacoes.index(situacao_atual) if situacao_atual in situacoes else None
         situacao_origem = st.selectbox(
-            "Situação do curso de origem",
+            "Situação do curso de origem *",
             situacoes,
             index=indice_situacao,
             placeholder="Selecione uma situação",
             key=f"situacao_origem_{dados[0]}",
         )
         procedencia = st.text_input(
-            "Instituição/faculdade de procedência",
+            "Instituição de origem",
             value=dados[5] or "",
             max_chars=150,
+            help="Faculdade ou universidade em que o aluno estudou esse curso.",
             key=f"procedencia_{dados[0]}",
         )
 

@@ -17,8 +17,8 @@ from services.situacao_academica import classificar_situacao
 
 
 dados = apresentar_etapa(3)
-st.subheader("Leitura do histórico acadêmico")
-st.write("Revise e corrija os dados identificados antes de confirmá-los para as próximas etapas.")
+st.subheader("Disciplinas identificadas no histórico")
+st.write("Confira os dados que foram lidos no documento. Corrija o que for necessário e confirme para continuar a análise.")
 
 try:
     extracao, disciplinas = obter_extracao_historico(dados[0])
@@ -27,7 +27,7 @@ except psycopg.Error:
     st.stop()
 
 if not extracao:
-    if st.button("Extrair disciplinas do histórico", type="primary"):
+    if st.button("Ler histórico e identificar disciplinas", type="primary"):
         try:
             documento = obter_conteudo_historico(dados[0])
             if documento is None:
@@ -61,7 +61,7 @@ else:
                 "Carga horária": registro[4] or "",
                 "Ano/semestre": registro[5] or "",
                 "Situação": registro[6] or "",
-                "Evidência no documento": registro[7],
+            "Trecho do histórico": registro[7],
             }
             for registro in disciplinas
         ]
@@ -70,7 +70,7 @@ else:
                 pd.DataFrame(registros_editor),
                 hide_index=True,
                 num_rows="fixed",
-                disabled=["ID", "Evidência no documento"],
+                disabled=["ID", "Trecho do histórico"],
                 column_config={
                     "ID": st.column_config.NumberColumn("ID", format="%d"),
                     "Código": st.column_config.TextColumn("Código"),
@@ -79,8 +79,8 @@ else:
                     "Carga horária": st.column_config.TextColumn("Carga horária"),
                     "Ano/semestre": st.column_config.TextColumn("Ano/semestre"),
                     "Situação": st.column_config.TextColumn("Situação"),
-                    "Evidência no documento": st.column_config.TextColumn(
-                        "Evidência no documento", width="large"
+                    "Trecho do histórico": st.column_config.TextColumn(
+                        "Trecho do histórico", width="large"
                     ),
                 },
                 key=f"editor_revisao_historico_{extracao[0]}",
@@ -138,7 +138,7 @@ else:
         )
 
     if extracao[4]:
-        st.subheader("Comparação de carga horária")
+        st.subheader("Conferência da carga horária")
         try:
             candidatas_origem = listar_disciplinas_elegiveis_para_aproveitamento(dados[0])
             disciplinas_destino = listar_disciplinas_por_matriz(dados[8])

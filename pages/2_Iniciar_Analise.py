@@ -13,7 +13,8 @@ from services.documentos import validar_historico, validar_plano_origem
 
 
 dados = apresentar_etapa(0)
-st.caption("Salve antes de voltar, trocar de análise ou navegar para outra página. Alterações não salvas podem ser descartadas.")
+st.write("Primeiro, identifique o aluno. Depois, anexe o histórico acadêmico; os planos de ensino da instituição de origem são opcionais.")
+st.caption("Salve antes de sair desta etapa. Alterações não salvas podem ser descartadas.")
 
 if dados and st.button("Cadastrar outra análise"):
     ativar_analise(None)
@@ -27,7 +28,7 @@ else:
     if st.session_state.pop("limpar_cadastro_aluno", False):
         st.session_state.cadastro_nome = ""
         st.session_state.cadastro_ra = ""
-    with st.expander("Cadastrar aluno"):
+    with st.expander("Cadastrar aluno", expanded=st.session_state.aluno_id is None):
         with st.form("form_aluno"):
             nome = st.text_input("Nome do aluno *", max_chars=150, key="cadastro_nome")
             ra = st.text_input("RA (opcional)", max_chars=30, key="cadastro_ra")
@@ -49,8 +50,12 @@ else:
         if st.session_state.pop("aluno_cadastrado", False):
             st.success("Aluno cadastrado. Você já pode iniciar uma análise para ele.")
 
-    st.subheader("Buscar aluno")
-    termo = st.text_input("Nome ou parte do nome", key="busca_aluno").strip()
+    st.subheader("Ou localize um aluno já cadastrado")
+    termo = st.text_input(
+        "Nome do aluno",
+        placeholder="Digite o nome ou parte do nome",
+        key="busca_aluno",
+    ).strip()
     if termo:
         try:
             resultados = buscar_alunos_por_nome(termo)
@@ -79,8 +84,6 @@ else:
                 if editar.button("Editar", key=f"editar_aluno_{ident}"):
                     st.session_state.editando_aluno_id = ident
                     st.rerun()
-    else:
-        st.info("Digite o nome ou parte do nome para buscar um aluno.")
 
     editando_aluno_id = st.session_state.get("editando_aluno_id")
     if editando_aluno_id is not None:
@@ -163,8 +166,8 @@ else:
         st.session_state.aluno_id = aluno_id = None
         st.warning("O aluno selecionado não foi encontrado. Selecione outro aluno.")
 
-st.subheader("Dados da análise ativa" if dados else "Iniciar análise para o aluno selecionado")
-st.caption("Avançar salva os dados deste formulário antes de continuar.")
+st.subheader("Documentos do aproveitamento")
+st.caption("Ao continuar, os documentos ficam vinculados ao aluno e a esta solicitação de aproveitamento.")
 
 historico = None
 planos_origem = []
@@ -222,13 +225,13 @@ with st.form(f"form_analise_{dados[0] if dados else 'nova'}"):
         "Semestre/Ano de ingresso",
         value=(dados[3] or "") if dados else "",
         placeholder="1/2027 ou 2/2027",
-        help="Semestre e ano de ingresso do aluno na UNIPAR. O período de encaixe será definido após a análise curricular.",
+        help="Informe quando o aluno ingressou ou ingressará na UNIPAR (por exemplo, 1/2027). Este dado é opcional.",
         key=f"analise_{dados[0] if dados else 'nova'}_semestre_ano",
     )
     voltar, salvar, avancar = st.columns(3)
     voltar.form_submit_button("Voltar", disabled=True)
     salvar_apenas = salvar.form_submit_button("Salvar alterações" if dados else "Salvar análise")
-    continuar = avancar.form_submit_button("Avançar", type="primary")
+    continuar = avancar.form_submit_button("Salvar e continuar", type="primary")
 
 if salvar_apenas or continuar:
     if aluno_id is None:
@@ -285,7 +288,7 @@ if salvar_apenas or continuar:
                     st.rerun()
 
 st.divider()
-with st.expander("Selecionar uma análise cadastrada", expanded=dados is None):
+with st.expander("Retomar uma análise existente"):
     try:
         analises = listar_analises()
     except psycopg.Error:

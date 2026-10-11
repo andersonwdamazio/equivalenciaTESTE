@@ -13,10 +13,10 @@ SITUACOES_ORIGEM = ("Concluído", "Incompleto", "Trancado")
 
 
 ETAPAS = (
-    ("Iniciar Análise", "pages/2_Iniciar_Analise.py"),
-    ("Origem do Aproveitamento", "pages/4_Origem_do_Aproveitamento.py"),
-    ("Curso e Matriz", "pages/3_Curso_e_Matriz.py"),
-    ("Continuação da Análise", "pages/5_Continuacao_da_Analise.py"),
+    ("Aluno e documentos", "pages/2_Iniciar_Analise.py"),
+    ("Curso de origem", "pages/4_Origem_do_Aproveitamento.py"),
+    ("Curso e matriz de destino", "pages/3_Curso_e_Matriz.py"),
+    ("Análise de equivalência", "pages/5_Continuacao_da_Analise.py"),
 )
 
 
@@ -67,13 +67,13 @@ def apresentar_etapa(etapa):
 
     if dados:
         st.session_state.aluno_id = dados[9]
-        st.write(f"Análise ativa: {dados[1]} — nº {dados[0]}")
+        st.write(f"Aproveitamento em andamento: {dados[1]} — nº {dados[0]}")
     st.caption(f"Etapa {etapa + 1} de {len(ETAPAS)}")
     st.title(ETAPAS[etapa][0])
     st.caption(" → ".join(nome for nome, _ in ETAPAS))
     if etapa > 0 and dados is None:
         st.warning("Crie ou selecione uma análise para continuar.")
-        if st.button("Ir para Iniciar Análise"):
+        if st.button("Ir para aluno e documentos"):
             ir_para_etapa(0)
         st.stop()
 
@@ -89,19 +89,19 @@ def apresentar_etapa(etapa):
             st.stop()
         if historico is None:
             pendencia = 0
-            mensagem = "Anexe o histórico acadêmico em Iniciar Análise antes de continuar."
+            mensagem = "Anexe o histórico acadêmico na etapa Aluno e documentos antes de continuar."
         try:
             if pendencia is None:
                 normalizar_semestre_ano_ingresso(dados[3])
         except ValueError:
             pendencia = 0
-            mensagem = "Corrija e salve o Semestre/Ano de ingresso em Iniciar Análise (1/2027 ou 2/2027), ou deixe o campo vazio."
+            mensagem = "Corrija o semestre/ano de ingresso na etapa Aluno e documentos (por exemplo, 1/2027) ou deixe o campo vazio."
         if pendencia is None and etapa > 1 and dados[4] not in SITUACOES_ORIGEM:
             pendencia = 1
-            mensagem = "Selecione e salve a situação do curso de origem em Origem do Aproveitamento antes de continuar."
+            mensagem = "Informe a situação do curso de origem antes de continuar."
         if pendencia is None and etapa > 2 and (dados[7] is None or dados[8] is None):
             pendencia = 2
-            mensagem = "Selecione e salve o curso e a matriz em Curso e Matriz antes de continuar."
+            mensagem = "Selecione o curso e a matriz curricular de destino antes de continuar."
         if pendencia is None and etapa > 3:
             try:
                 extracao, disciplinas = obter_extracao_historico(dados[0])
@@ -117,7 +117,7 @@ def apresentar_etapa(etapa):
                 or any(not disciplina[8] for disciplina in disciplinas)
             ):
                 pendencia = 3
-                mensagem = "Revise e confirme todas as disciplinas extraídas antes de iniciar a comparação de equivalências."
+                mensagem = "Revise e confirme as disciplinas identificadas no histórico antes de continuar."
     if pendencia is not None:
         st.session_state.etapa_atual = pendencia
         st.warning(mensagem)

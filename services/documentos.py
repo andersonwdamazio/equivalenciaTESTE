@@ -1,6 +1,8 @@
 from io import BytesIO
 from pathlib import PurePath
 from zipfile import BadZipFile, ZipFile
+from docx import Document
+from pypdf import PdfReader
 
 
 FORMATOS_HISTORICO = ("pdf", "docx")
@@ -43,3 +45,17 @@ def validar_plano_origem(nome_arquivo, conteudo):
         if "[Content_Types].xml" not in nomes or "word/document.xml" not in nomes:
             raise ValueError(f"O arquivo {nome_arquivo} não parece ser um DOCX válido.")
     return extensao
+
+
+def extrair_texto_documento(nome_arquivo, conteudo):
+    """Read text from supported source-plan files without inventing missing content."""
+    extensao = validar_plano_origem(nome_arquivo, conteudo)
+    if extensao == "pdf":
+        pdf = PdfReader(BytesIO(conteudo), strict=False)
+        return "\n".join(page.extract_text() or "" for page in pdf.pages).strip()
+    doc = Document(BytesIO(conteudo))
+    paragraphs = [item.text for item in doc.paragraphs if item.text.strip()]
+    for table in doc.tables:
+        for row in table.rows:
+            paragraphs.append(" | ".join(cell.text.strip() for cell in row.cells))
+    return "\n".join(paragraphs).strip()

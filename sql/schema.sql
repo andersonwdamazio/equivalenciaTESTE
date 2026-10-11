@@ -1,7 +1,29 @@
+CREATE TABLE unidade (
+    id SERIAL PRIMARY KEY,
+    nome VARCHAR(150) NOT NULL UNIQUE CHECK (nome ~ '[^[:space:]]'),
+    ativa BOOLEAN NOT NULL DEFAULT TRUE,
+    criada_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+INSERT INTO unidade (nome) VALUES ('Unidade principal');
+
+CREATE TABLE coordenador (
+    id SERIAL PRIMARY KEY,
+    unidade_id INTEGER NOT NULL REFERENCES unidade(id),
+    nome VARCHAR(150) NOT NULL CHECK (nome ~ '[^[:space:]]'),
+    email VARCHAR(254) NOT NULL,
+    senha_hash TEXT NOT NULL,
+    perfil VARCHAR(30) NOT NULL DEFAULT 'coordenador' CHECK (perfil IN ('coordenador', 'administrador')),
+    ativo BOOLEAN NOT NULL DEFAULT TRUE,
+    criado_em TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_coordenador_unidade_email UNIQUE (unidade_id, email)
+);
+
 CREATE TABLE curso (
     id SERIAL PRIMARY KEY,
     codigo VARCHAR(10) NOT NULL UNIQUE,
-    nome VARCHAR(150) NOT NULL
+    nome VARCHAR(150) NOT NULL,
+    unidade_id INTEGER NOT NULL REFERENCES unidade(id) DEFAULT 1
 );
 
 CREATE TABLE matriz (
@@ -35,6 +57,7 @@ CREATE TABLE plano_ensino (
 
 CREATE TABLE aluno (
     id SERIAL PRIMARY KEY,
+    unidade_id INTEGER NOT NULL REFERENCES unidade(id) DEFAULT 1,
     nome VARCHAR(150) NOT NULL CONSTRAINT ck_aluno_nome CHECK (nome ~ '[^[:space:]]'),
     ra VARCHAR(30),
     CONSTRAINT ck_aluno_ra CHECK (ra IS NULL OR ra ~ '[^[:space:]]')
@@ -42,6 +65,7 @@ CREATE TABLE aluno (
 
 CREATE TABLE analise (
     id SERIAL PRIMARY KEY,
+    unidade_id INTEGER NOT NULL REFERENCES unidade(id) DEFAULT 1,
     aluno_id INTEGER NOT NULL REFERENCES aluno(id),
     semestre_ano VARCHAR(20),
     curso_origem VARCHAR(150),

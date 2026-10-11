@@ -1,306 +1,108 @@
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/logo_dark.png">
-    <source media="(prefers-color-scheme: light)" srcset="assets/logo_light.png">
-    <img src="assets/logo_light.png" alt="equivalencIA" width="430">
-  </picture>
-</p>
+# equivalencIA
 
-<p align="center">
-  <strong>Sistema de apoio à análise curricular e ao aproveitamento de disciplinas.</strong>
-</p>
+Sistema interno para apoiar a coordenação acadêmica na análise de aproveitamento de disciplinas. O coordenador cadastra e localiza alunos, reúne histórico e planos, revisa os dados extraídos, avalia sugestões e emite o parecer. O aluno não usa esta interface.
 
-<p align="center">
-  <a href="https://equivalencia.streamlit.app">
-    <img src="https://img.shields.io/badge/Acessar%20aplicação-Streamlit-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white" alt="Acessar aplicação">
-  </a>
-</p>
+## Aplicação React e API
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Python-3.12-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python">
-  <img src="https://img.shields.io/badge/Streamlit-App-FF4B4B?style=flat-square&logo=streamlit&logoColor=white" alt="Streamlit">
-  <img src="https://img.shields.io/badge/PostgreSQL-Database-4169E1?style=flat-square&logo=postgresql&logoColor=white" alt="PostgreSQL">
-  <img src="https://img.shields.io/badge/Supabase-Cloud-3FCF8E?style=flat-square&logo=supabase&logoColor=white" alt="Supabase">
-  <img src="https://img.shields.io/badge/Status-Em%20desenvolvimento-F59E0B?style=flat-square" alt="Status">
-</p>
-
----
-
-## Sobre o projeto
-
-O **equivalencIA** é um sistema desenvolvido para auxiliar o processo de análise de equivalência e aproveitamento de disciplinas.
-
-A aplicação organiza as informações do aluno e da análise curricular em um fluxo guiado, preparando os dados necessários para as etapas de comparação de disciplinas e apoio à decisão do coordenador.
-
-O projeto está sendo desenvolvido como parte da disciplina de **Laboratório de Software da UNIPAR**.
-
-## Aplicação online
-
-A aplicação está publicada no **Streamlit Community Cloud** e utiliza um banco PostgreSQL remoto hospedado no **Supabase**.
-
-**Acesse:** [equivalencia.streamlit.app](https://equivalencia.streamlit.app)
-
-### Arquitetura atual
+O novo fluxo usa React/Vite no navegador, FastAPI para os serviços e mantém o PostgreSQL e as operações de domínio existentes em `database.py`.
 
 ```text
-Usuário / QA
-     │
-     ▼
-Streamlit Community Cloud
-     │
-     ▼
-   equivalencIA
-     │
-     ▼
-Supabase PostgreSQL
+React (frontend/) → FastAPI (api/) → PostgreSQL
+                            ├──────→ extração de PDF/DOCX
+                            └──────→ adaptador opcional de agente de equivalência
 ```
 
-O mesmo banco remoto também pode ser utilizado durante o desenvolvimento local.
+O aplicativo Streamlit anterior continua disponível pelo `app.py` enquanto o fluxo React é integrado. As alterações existentes nesse código foram preservadas.
 
-## Funcionalidades atuais
+### Publicar um link gratuito no Render
 
-Atualmente, o sistema permite:
+O `render.yaml` e o `Dockerfile` publicam a interface React e a API FastAPI no mesmo serviço. O PostgreSQL continua no Supabase; React não substitui o banco. No plano gratuito, o serviço do Render pode dormir após um período sem acessos e levar alguns segundos para acordar.
 
-- cadastrar alunos;
-- buscar alunos por nome;
-- editar dados de alunos;
-- criar múltiplas análises para o mesmo aluno;
-- retomar análises existentes;
-- informar o semestre/ano de ingresso;
-- registrar dados do curso e da instituição de origem;
-- selecionar curso e matriz curricular de destino;
-- cadastrar disciplinas da UNIPAR com código, nome, carga horária e período;
-- consultar disciplinas filtradas por matriz curricular;
-- cadastrar e editar planos de ensino vinculados às disciplinas da UNIPAR;
-- anexar histórico acadêmico em PDF ou DOCX a cada análise;
-- extrair campos de históricos PDF/DOCX para revisão do coordenador;
-- corrigir os campos extraídos e confirmar os dados revisados antes das próximas etapas;
-- impedir que disciplinas reprovadas ou sem aprovação identificada sigam para aproveitamento;
-- comparar a carga horária das disciplinas de origem aprovadas com as da matriz selecionada;
-- navegar entre as etapas por meio de um fluxo guiado;
-- validar pré-requisitos antes do avanço entre etapas;
-- persistir dados em PostgreSQL;
-- utilizar o sistema localmente ou pela versão publicada.
+1. Envie o repositório para o GitHub e, no Render, crie um **Blueprint** conectado a esse repositório. O Render encontrará o `render.yaml` automaticamente.
+2. No serviço criado, preencha `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER` e `DB_PASSWORD` com os dados de conexão do projeto Supabase. Se a conexão direta não funcionar na hospedagem, use os dados do **Session Pooler** do Supabase.
+3. Aguarde o deploy concluir e abra a URL `.onrender.com` informada pelo Render. O login existente usa os coordenadores e unidades do banco conectado.
 
-### Fluxo atual
+Não coloque senhas ou chaves no GitHub nem no `render.yaml`; informe os dados do banco nos Environment Variables do serviço Render. O `SESSION_SECRET` é gerado pelo Blueprint.
 
-```text
-Aluno e Análise
-      │
-      ▼
-Origem do Aproveitamento
-      │
-      ▼
-Curso e Matriz
-      │
-      ▼
-Próximas etapas
-```
+### Iniciar localmente
 
-As funcionalidades de upload de documentos, extração de disciplinas, comparação com IA e geração do documento final ainda estão em desenvolvimento.
-
-## Tecnologias
-
-| Categoria | Tecnologias |
-|---|---|
-| Aplicação | Python, Streamlit |
-| Banco de dados | PostgreSQL, Supabase |
-| Acesso ao banco | psycopg |
-| Configuração local | python-dotenv |
-| Documentos | python-docx |
-| Infraestrutura | GitHub, Streamlit Community Cloud, Supabase |
-
-## Estrutura do projeto
-
-```text
-equivalencIA/
-├── assets/             # identidade visual
-├── documents/          # documentos e recursos do projeto
-├── pages/              # páginas da aplicação
-│   ├── 6_Disciplinas.py # cadastro e consulta das disciplinas da UNIPAR
-│   ├── 7_Planos_de_Ensino.py # cadastro e edição dos planos de ensino
-│   ├── 5_Continuacao_da_Analise.py # extração e revisão dos dados do histórico
-├── services/           # validação e serviços da aplicação
-│   ├── documentos.py   # validação do histórico acadêmico
-│   ├── extracao_historico.py # extração conservadora de texto e disciplinas
-│   ├── comparacao_carga_horaria.py # validação da carga horária mínima
-├── sql/
-│   ├── migrations/     # migrações incrementais
-│   ├── schema.sql      # estrutura atual do banco
-│   └── seed.sql        # dados iniciais
-├── tests/              # testes automatizados
-├── app.py              # entrada da aplicação Streamlit
-├── database.py         # acesso e operações no PostgreSQL
-├── navegacao.py        # controle do fluxo de análise
-├── requirements.txt
-└── README.md
-```
-
-## Banco de dados
-
-O banco principal compartilhado do projeto utiliza PostgreSQL no **Supabase**.
-
-O arquivo `sql/schema.sql` representa a estrutura completa necessária para criar uma base nova.
-
-Para uma nova base:
-
-```text
-schema.sql
-    │
-    ▼
-seed.sql
-```
-
-As migrações existentes em `sql/migrations/` são destinadas apenas a bancos criados em versões anteriores do projeto.
-
-Para atualizar uma base existente com o cadastro de disciplinas, execute uma vez `sql/migrations/cadastro_disciplinas.sql`. Em uma base nova, a tabela já é criada por `sql/schema.sql`.
-
-Para adicionar os planos de ensino a uma base existente, execute uma vez `sql/migrations/planos_ensino.sql`. Em uma base nova, a tabela já é criada por `sql/schema.sql`.
-
-Para adicionar o armazenamento dos históricos a uma base existente, execute uma vez `sql/migrations/historico_academico.sql`. Os arquivos originais são armazenados como bytes no PostgreSQL e associados à análise.
-
-Para habilitar anexos múltiplos de planos da instituição de origem em uma base que já possui a tabela `documento`, execute uma vez `sql/migrations/planos_ensino_origem.sql`.
-
-Após criar a tabela `documento` no banco existente, execute ou reexecute `sql/migrations/extracao_historico.sql` para guardar os resultados e a confirmação da revisão. A leitura usa `pypdf` para PDFs com camada de texto e `python-docx` para DOCX; não inclui OCR para documentos digitalizados.
-
-> **Importante:** não execute migrações antigas em um banco novo criado diretamente a partir do `schema.sql` atual.
-
-## Executando localmente
-
-### 1. Clone o repositório
-
-```bash
-git clone https://github.com/matheusheberle/equivalencIA.git
-cd equivalencIA
-```
-
-### 2. Crie o ambiente virtual
-
-#### Windows
+1. Crie/ative o ambiente virtual e instale as dependências Python:
 
 ```powershell
 py -m venv .venv
 .\.venv\Scripts\Activate.ps1
-```
-
-#### Linux/macOS
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-```
-
-### 3. Instale as dependências
-
-```bash
 pip install -r requirements.txt
 ```
 
-## Configuração do ambiente
+2. Configure `.env` com acesso ao PostgreSQL. Use `.env.example` como referência e não compartilhe credenciais.
+3. Aplique uma vez, nesta ordem, as migrações `sql/migrations/auth_coordenacao.sql` e `sql/migrations/equivalencias_ia.sql` no banco usado pelo projeto. A primeira cria as unidades e contas de coordenação e associa os dados existentes à unidade principal.
+4. Defina `APP_ENV=development` durante testes locais e `SESSION_SECRET` no `.env` com um valor aleatório de pelo menos 32 caracteres. Para criar um valor no PowerShell: `py -c "import secrets; print(secrets.token_urlsafe(48))"`. O cadastro inicial aceita senha curta apenas em desenvolvimento; em produção, exige ao menos 12 caracteres.
+5. Cadastre o primeiro acesso à coordenação sem colocar a senha no histórico do terminal:
 
-Crie um arquivo `.env` na raiz do projeto:
-
-```env
-DB_HOST=
-DB_PORT=5432
-DB_NAME=
-DB_USER=
-DB_PASSWORD=
+```powershell
+py scripts/create_coordinator.py
 ```
 
-As credenciais do ambiente compartilhado são fornecidas pelo Supabase.
+6. Inicie a API na raiz do repositório:
 
-> Nunca envie o arquivo `.env`, senhas ou outras credenciais para o GitHub.
-
-O `.env.example` deve conter somente os nomes das variáveis necessárias, sem valores privados.
-
-## Executar a aplicação
-
-Com o ambiente configurado:
-
-```bash
-python -m streamlit run app.py
+```powershell
+uvicorn api.main:app --reload
 ```
 
-A aplicação será disponibilizada no navegador.
+7. Em outro terminal, inicie a interface React:
 
-## Streamlit Community Cloud
-
-A versão online é publicada diretamente a partir do repositório GitHub.
-
-As credenciais necessárias para acessar o Supabase são configuradas nos **Secrets do Streamlit Community Cloud** e não ficam armazenadas no código-fonte.
-
-**Aplicação:** [https://equivalencia.streamlit.app](https://equivalencia.streamlit.app)
-
-## Testes
-
-Execute a suíte automatizada com:
-
-```bash
-python -m unittest discover -s tests -v
+```powershell
+cd frontend
+pnpm install
+pnpm run dev
 ```
 
-Os testes abrangem, entre outros cenários:
+A API aceita a origem `http://localhost:5173` por padrão. Para outro endereço, configure `FRONTEND_ORIGINS`. A URL da API pode ser definida no frontend com `VITE_API_URL` (por padrão, `http://localhost:8000/api`). Em produção, use HTTPS e `SESSION_COOKIE_SECURE=true`.
 
-- cadastro e edição de alunos;
-- RA opcional;
-- busca por nome;
-- múltiplas análises por aluno;
-- validação do semestre/ano de ingresso;
-- navegação entre etapas;
-- pré-requisitos do fluxo;
-- persistência das informações;
-- tratamento de falhas do PostgreSQL;
-- prevenção de confirmações falsas de salvamento.
+## Fluxo da coordenação
 
-Os testes de integração com PostgreSQL utilizam ambientes isolados e rollback para evitar alterações permanentes nos dados utilizados pela aplicação.
+1. Localizar um cadastro de aluno ou cadastrar um novo. O mesmo cadastro pode ser reutilizado em várias análises; RA é opcional.
+2. Registrar instituição, curso e situação de origem.
+3. Selecionar curso e matriz de destino e informar o período de ingresso.
+4. Anexar o histórico (PDF ou DOCX) e, opcionalmente, vários planos de ensino da origem.
+5. Extrair e revisar as disciplinas do histórico. Dados não identificados permanecem para correção do coordenador; documentos digitalizados sem camada de texto não têm OCR.
+6. Confirmar os dados, consultar sugestões quando um adaptador de IA estiver conectado ou registrar uma correspondência manual. Só disciplinas explicitamente aprovadas e com carga de origem igual ou superior à carga de destino podem ser associadas.
+7. Aprovar, rejeitar ou deixar pendente cada item e conferir a prévia do parecer.
+8. Gerar o DOCX com itens aprovados, não aprovados e pendentes.
 
-## Regras atuais importantes
+A IA é uma fonte de sugestões. A decisão acadêmica continua com o coordenador. A interface continua o fluxo mesmo quando a IA ainda não foi conectada.
 
-- O nome do aluno é obrigatório.
-- O RA é opcional.
-- Um aluno pode possuir várias análises.
-- O Semestre/Ano de ingresso é opcional.
-- Quando informado, o ingresso deve utilizar o formato `1/2027` ou `2/2027`.
-- Curso de origem e procedência são opcionais no fluxo atual.
-- A situação do curso de origem deve ser:
-  - `Concluído`
-  - `Incompleto`
-  - `Trancado`
-- A matriz curricular representa uma versão da grade do curso.
-- Cada disciplina pertence a uma matriz; códigos podem se repetir em matrizes diferentes, mas não dentro da mesma matriz.
-- A carga horária e o período da disciplina devem ser números inteiros positivos.
-- O período de encaixe do aluno será definido posteriormente no processo de análise.
+## Integração de IA
 
-## Roadmap
+`services/equivalencia_agent.py` define o contrato `EquivalenceAgent`. Um adaptador deve implementar `provider_name`, `model_name` e `analyze(context)`, retornando uma lista com `source_id`, `target_id`, `confidence`, `rationale` e `evidence`. O serviço monta o contexto com disciplinas aprovadas, matriz de destino, planos disponíveis e validações de carga horária; sugestões fora das combinações elegíveis são rejeitadas.
 
-O backlog do projeto prevê:
+Para registrar o adaptador, defina `AI_PROVIDER` e `AI_AGENT_CLASS=modulo:Classe`, por exemplo `services.meu_agente:MeuAgente`. Não há modelo treinado, provedor, chave de API ou chamada externa configurada neste repositório.
 
-- [x] cadastro e consulta das disciplinas das matrizes da UNIPAR;
-- [ ] planos de ensino das disciplinas de destino;
-- [ ] upload do histórico acadêmico;
-- [ ] upload opcional dos planos de ensino de origem;
-- [ ] extração das disciplinas do histórico;
-- [ ] revisão dos dados extraídos;
-- [ ] validação de aprovação e carga horária;
-- [ ] comparação de conteúdo com apoio de IA;
-- [ ] sugestão de equivalências;
-- [ ] decisão final do coordenador;
-- [ ] geração do documento institucional.
+## Parecer institucional
 
-> A IA terá papel de **apoio à análise**. A decisão final de equivalência continuará sendo realizada pelo coordenador.
+A API usa `REPORT_TEMPLATE_PATH` para abrir um modelo DOCX e substituir marcadores como `{{student_name}}`, `{{student_ra}}`, `{{origin_institution}}`, `{{origin_course}}`, `{{target_course}}`, `{{target_matrix}}`, `{{term}}` e `{{coordinator_note}}`. Se o arquivo não estiver disponível, é gerado um documento provisório. O DOC/PDF de referência enviado contém dados pessoais de alunos e não foi copiado para o repositório. Coloque o modelo oficial DOCX em `documents/modelo_parecer.docx` ou atualize a variável de ambiente quando o arquivo editável correto estiver disponível.
 
-## Equipe
+## Banco e dados
 
-| Integrante | Papel |
-|---|---|
-| **Matheus Heberle** | Product Owner / Scrum Master |
-| **Anderson Damazio** | Desenvolvimento |
-| **Thiago** | Desenvolvimento / IA |
-| **Matheus Pavlak** | Quality Assurance |
+`sql/schema.sql` descreve uma base nova. Migrações em `sql/migrations/` são incrementais e devem ser aplicadas uma única vez na base existente apropriada. Para o fluxo React, execute `sql/migrations/auth_coordenacao.sql` e `sql/migrations/equivalencias_ia.sql`. A migração não é executada automaticamente pela API.
 
-## Status do projeto
+Arquivos enviados permanecem associados à análise no PostgreSQL. Há limite padrão de 20 MB por documento, configurável em `MAX_DOCUMENT_BYTES`.
 
-🚧 **Em desenvolvimento**
+## Requisitos do documento recebido
 
-O fluxo inicial de análise curricular já está funcional. Novas funcionalidades estão sendo implementadas de forma incremental por meio das Sprints.
+O arquivo `requisitos-aproveitamento-disciplinas.docx` define uma visão de produto voltada a coordenadores e administradores. A aplicação já oferece login institucional, escolha de unidade, sessão protegida e separação de alunos, cursos e análises por unidade. O perfil administrativo avançado, importação Excel/CSV, trilha de auditoria completa e exportação PDF continuam como próximos incrementos.
+
+## Estrutura principal
+
+```text
+api/                       API FastAPI
+frontend/                  Interface React/Vite da coordenação
+services/equivalencia_agent.py  Contrato do agente de IA
+services/documentos.py     Validação e leitura de PDF/DOCX
+sql/migrations/             Migrações incrementais do PostgreSQL
+app.py                      Interface Streamlit anterior
+```
+
+## Segurança e privacidade
+
+Use somente dados de teste ao desenvolver. Os pareceres enviados são documentos identificáveis e devem permanecer fora do Git. O acesso usa cookie `HttpOnly`, assinatura HMAC e senha com PBKDF2; cada coordenador é associado a uma unidade e as rotas de análise verificam a unidade proprietária. Configure segredos fortes e HTTPS antes de disponibilizar em ambiente real; CORS não substitui controle de acesso.

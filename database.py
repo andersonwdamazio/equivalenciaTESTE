@@ -176,14 +176,20 @@ def _normalizar_dados_aluno(nome, ra):
     return nome, ra
 
 
-def criar_aluno(nome, ra=None):
+def criar_aluno(nome, ra=None, unidade_id=None):
     nome, ra = _normalizar_dados_aluno(nome, ra)
     with obter_conexao() as conexao:
         with conexao.cursor() as cursor:
-            cursor.execute(
-                "INSERT INTO aluno (nome, ra) VALUES (%s, %s) RETURNING id;",
-                (nome, ra),
-            )
+            if unidade_id is None:
+                cursor.execute(
+                    "INSERT INTO aluno (nome, ra) VALUES (%s, %s) RETURNING id;",
+                    (nome, ra),
+                )
+            else:
+                cursor.execute(
+                    "INSERT INTO aluno (nome, ra, unidade_id) VALUES (%s, %s, %s) RETURNING id;",
+                    (nome, ra, unidade_id),
+                )
             return cursor.fetchone()[0]
 
 

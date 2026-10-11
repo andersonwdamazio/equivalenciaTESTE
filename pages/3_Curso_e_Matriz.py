@@ -10,9 +10,7 @@ from navegacao import apresentar_etapa, confirmar_salvamento, ir_para_etapa
 
 
 dados_analise = apresentar_etapa(2)
-st.caption("Avançar salva a seleção.")
-st.caption("Salve antes de voltar, trocar de análise ou navegar para outra página. Alterações não salvas podem ser descartadas.")
-st.caption("A matriz curricular representa a versão da grade do curso, não necessariamente o semestre atual.")
+st.write("Selecione o curso da UNIPAR para o qual o aluno solicita aproveitamento.")
 if st.button("Voltar"):
     ir_para_etapa(1)
 try:
@@ -45,7 +43,7 @@ indice_curso = next(
 )
 
 curso_selecionado = st.selectbox(
-    "Curso",
+    "Curso de destino",
     cursos,
     index=indice_curso,
     format_func=lambda curso: f"{curso[1]} — {curso[2]}",
@@ -78,10 +76,11 @@ indice_matriz = next(
 )
 
 matriz_selecionada = st.selectbox(
-    "Matriz curricular",
+    "Matriz curricular de destino",
     matrizes,
     index=indice_matriz,
     placeholder="Selecione uma matriz",
+    help="A matriz curricular é a grade do curso: a lista de disciplinas usada para comparar com o histórico de origem.",
     format_func=lambda matriz: matriz[2],
     key=f"matriz_{dados_analise[0]}_{curso_selecionado[0]}"
 )
