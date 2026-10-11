@@ -4,6 +4,7 @@ import re
 import base64
 import hashlib
 import hmac
+import logging
 import secrets
 import time
 import unicodedata
@@ -35,6 +36,7 @@ from services.equivalencia_agent import get_agent
 
 
 app = FastAPI(title="equivalencIA API", version="0.1.0")
+logger = logging.getLogger(__name__)
 allowed_origins = os.getenv(
     "FRONTEND_ORIGINS",
     "http://localhost:5173,http://localhost:4173",
@@ -474,6 +476,7 @@ async def create_analysis(
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
     except psycopg.Error as error:
+        logger.exception("Falha de banco ao salvar análise de aproveitamento.")
         raise HTTPException(status_code=503, detail="Não foi possível salvar a análise.") from error
 
 
