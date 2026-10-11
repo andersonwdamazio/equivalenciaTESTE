@@ -19,6 +19,14 @@ _SITUACAO = re.compile(
     r"\b(aprovad[oa]|reprovad[oa]|cursando|em\s+curso|dispensad[oa]|"
     r"aproveitad[oa]|trancad[oa]|cancelad[oa]|reprovad[oa]\s+por\s+nota)\b", re.I
 )
+_LINHA_EQUIVALENCIA = re.compile(
+    r"^\s*(?P<periodo>(?:19|20)\d{2}\s*/\s*[12]|[12]\s*/\s*(?:19|20)\d{2})"
+    r"\s+(?P<codigo>\d{5,8})\s+(?P<resto>.+)$"
+)
+_COLUNA_DESTINO = re.compile(r"\s{2,}(?:\d{5,8}|--)\s+[A-ZÁ-Ú]", re.I)
+_RESULTADO_EQUIVALENCIA = re.compile(
+    r"^(?P<nome>.+?)\s+(?P<nota>\d{1,2}(?:[,.]\d{1,2})?)\s+(?P<carga>\d{1,3})\s*$"
+)
 
 
 def _sem_acentos(valor):
@@ -136,6 +144,58 @@ def _interpretar_linhas(linhas):
     return registros
 
 
+def _interpretar_linhas_equivalencia(linhas):
+    """Lê a coluna de disciplinas cursadas em formulários de equivalência da UNIPAR."""
+    registros = []
+    pode_completar_nome = False
+    for linha in linhas:
+        correspondencia = _LINHA_EQUIVALENCIA.match(linha)
+        if not correspondencia:
+            texto = linha.strip()
+            if (
+                pode_completar_nome
+                and registros
+                and texto
+                and len(texto) >= 3
+                and len(linha) - len(linha.lstrip()) >= 20
+                and not re.match(r"^(?:CURSANDO|A CURSAR|ANO|CÓDIGO|DISCIPLINA|EQUIVALÊNCIA)\b", texto, re.I)
+                and not re.search(r"\d{4,}|\b(?:CURSANDO|A CURSAR)\b", texto, re.I)
+                and re.fullmatch(r"[\wÀ-ÿ '&()/.-]+", texto)
+            ):
+                registros[-1]["nome"] = (registros[-1]["nome"] + " " + texto).strip()
+                registros[-1]["texto_origem"] += " " + texto
+                pode_completar_nome = True
+            else:
+                pode_completar_nome = False
+            continue
+
+        periodo = correspondencia.group("periodo").replace(" ", "")
+        codigo = correspondencia.group("codigo")
+        resto = correspondencia.group("resto")
+        destino = _COLUNA_DESTINO.search(resto)
+        if not destino:
+            pode_completar_nome = False
+            continue
+        origem = resto[:destino.start()].strip()
+        resultado = _RESULTADO_EQUIVALENCIA.match(origem)
+        if not resultado:
+            pode_completar_nome = False
+            continue
+        nome = resultado.group("nome").strip()
+        registro = {
+            "codigo": codigo,
+            "nome": nome,
+            "nota": resultado.group("nota"),
+            "carga_horaria": resultado.group("carga"),
+            "periodo": periodo,
+            "situacao": None,
+            "texto_origem": linha.strip(),
+        }
+        registros.append(registro)
+        pode_completar_nome = True
+    return registros
+
+
 def extrair_disciplinas(nome_arquivo, conteudo):
     extensao = PurePath(nome_arquivo or "").suffix.lower()
     try:
@@ -158,7 +218,9 @@ def extrair_disciplinas(nome_arquivo, conteudo):
     except Exception as erro:
         raise ValueError("Não foi possível ler o documento. Verifique se o PDF/DOCX não está corrompido ou protegido.") from erro
 
-    resultados = _interpretar_linhas(linhas)
+    resultados = _interpretar_linhas_equivalencia(linhas) if extensao == ".pdf" else []
+    if not resultados:
+        resultados = _interpretar_linhas(linhas)
     aviso = None
     if not any(linha.strip() for linha in linhas):
         aviso = "Não foi possível extrair texto. O PDF pode ser uma imagem digitalizada; os dados não foram inferidos."
