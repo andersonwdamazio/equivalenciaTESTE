@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity, ArrowDownToLine, ArrowLeft, ArrowRight, Building2, Check, CheckCircle2,
   ChevronDown, CircleHelp, Clock3, FileCheck2, FileText, GraduationCap,
@@ -272,7 +272,7 @@ function App() {
                 </div>}
                 {step === 1 && <div className="field-grid"><label className="field">Instituição de origem<input value={form.origin_institution} onChange={(e) => change("origin_institution", e.target.value)} placeholder="Nome da instituição" /></label><label className="field">Curso de origem<input value={form.origin_course} onChange={(e) => change("origin_course", e.target.value)} placeholder="Ex.: Administração" /></label><label className="field">Situação do curso<select value={form.origin_status} onChange={(e) => change("origin_status", e.target.value)}><option value="">Selecione</option><option>Concluído</option><option>Incompleto</option><option>Trancado</option></select></label></div>}
                 {step === 2 && <div className="field-grid"><label className="field">Curso de destino<select value={form.target_course_id} onChange={(e) => { change("target_course_id", e.target.value); change("target_matrix_id", ""); }}><option value="">Selecione o curso</option>{courses.map((c) => <option key={c.id} value={c.id}>{c.name} · {c.code}</option>)}</select></label><label className="field">Matriz curricular<select value={form.target_matrix_id} onChange={(e) => change("target_matrix_id", e.target.value)} disabled={!matrices.length}><option value="">Selecione a matriz</option>{matrices.map((m) => <option key={m.id} value={m.id}>{m.code}</option>)}</select></label><label className="field">Período de ingresso<input value={form.term} onChange={(e) => change("term", e.target.value)} placeholder="Ex.: 1/2027" /></label><div className="inline-note full"><GraduationCap size={17} /><span>A matriz define as disciplinas de destino usadas na comparação. Informe o período em que o aluno ingressará na universidade.</span></div></div>}
-                {step === 3 && <div className="upload-stack"><FileDrop title="Histórico acadêmico" hint="Obrigatório · PDF ou DOCX · até 20 MB" file={form.history} onFile={(file) => change("history", file)} /><FileDrop title="Planos de ensino da origem" hint="Opcional · envie um ou mais PDFs/DOCX" multiple files={form.plans} onFiles={(files) => change("plans", files)} onRemove={(index) => change("plans", form.plans.filter((_, i) => i !== index))} /></div>}
+                {step === 3 && <div className="upload-stack"><FileDrop title="Histórico acadêmico" hint="Obrigatório · PDF ou DOCX · até 20 MB" file={form.history} onFile={(file) => change("history", file)} onRemove={() => change("history", null)} /><FileDrop title="Planos de ensino da origem" hint="Opcional · envie um ou mais PDFs/DOCX" multiple files={form.plans} onFiles={(files) => change("plans", files)} onRemove={(index) => change("plans", form.plans.filter((_, i) => i !== index))} /></div>}
                 {step === 4 && <AnalysisPanel analysis={analysis} busy={busy} onExtract={runExtraction} onAnalyze={runAi} onReview={async (rows) => { try { const value = await saveHistoryReview(activeId, rows, true); setAnalysis(value); setNotice("Dados do histórico confirmados pelo coordenador."); } catch (e) { setError(e.message); } }} />}
                 {step === 5 && <ReviewPanel analysis={analysis} onDecision={saveDecision} onManual={async (data) => { try { setAnalysis(await addManualSuggestion(activeId, data)); setNotice("Correspondência manual adicionada à fila de revisão."); } catch (e) { setError(e.message); } }} />}
                 {step === 6 && <ReportPreview analysis={analysis} note={coordinatorNote} setNote={setCoordinatorNote} busy={busy} onDownload={makeReport} />}
@@ -306,8 +306,15 @@ function App() {
 }
 
 function FileDrop({ title, hint, file, files = [], multiple, onFile, onFiles, onRemove }) {
+  const inputRef = useRef(null);
   const picked = multiple ? files : file ? [file] : [];
-  return <div className="file-drop"><input type="file" accept=".pdf,.docx" multiple={multiple} onChange={(e) => multiple ? onFiles(Array.from(e.target.files || [])) : onFile(e.target.files?.[0] || null)} /><div className="upload-icon"><Upload size={19} /></div><div className="file-copy"><strong>{title}</strong><span>{hint}</span>{picked.map((f, i) => <small className="file-chip" key={f.name}><FileText size={13} />{f.name}{multiple && <button type="button" className="remove-file" onClick={() => onRemove(i)} aria-label={"Remover " + f.name}><X size={13} /></button>}</small>)}</div><span className="button button-quiet browse-button">Escolher arquivo</span></div>;
+  function handleFileChange(event) {
+    const selected = Array.from(event.target.files || []);
+    if (multiple) onFiles(selected);
+    else onFile(selected[0] || null);
+    event.target.value = "";
+  }
+  return <div className="file-drop"><input ref={inputRef} type="file" accept=".pdf,.docx" multiple={multiple} onChange={handleFileChange} /><div className="upload-icon"><Upload size={19} /></div><div className="file-copy"><strong>{title}</strong><span>{hint}</span>{picked.map((f, i) => <small className="file-chip" key={f.name}><FileText size={13} />{f.name}{onRemove && <button type="button" className="remove-file" onClick={() => onRemove(i)} aria-label={"Remover " + f.name}><X size={13} /></button>}</small>)}</div><span className="button button-quiet browse-button">Escolher arquivo</span></div>;
 }
 function Dashboard({ analyses, onNew, onOpen, onList }) {
   const waiting = analyses.filter((a) => a.status === "review").length;
