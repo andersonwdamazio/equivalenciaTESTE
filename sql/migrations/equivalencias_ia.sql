@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS equivalencia_sugestao (
     evidence JSONB NOT NULL DEFAULT '{}'::jsonb,
     decision VARCHAR(16) NOT NULL DEFAULT 'pending'
         CHECK (decision IN ('pending', 'approved', 'rejected', 'edited')),
+        
     coordinator_note TEXT NOT NULL DEFAULT '',
     provider VARCHAR(80),
     model VARCHAR(120),
