@@ -82,6 +82,12 @@ function App() {
   const [registerBusy, setRegisterBusy] = useState(false);
   const [coordinatorNote, setCoordinatorNote] = useState("");
 
+  useEffect(() => {
+    if (!error) return undefined;
+    const timeoutId = window.setTimeout(() => setError(""), 5000);
+    return () => window.clearTimeout(timeoutId);
+  }, [error]);
+
   const refresh = async () => {
     try { setAnalyses(await getAnalyses()); } catch (e) { setError(e.message); }
   };
