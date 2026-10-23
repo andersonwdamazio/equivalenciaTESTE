@@ -88,6 +88,12 @@ function App() {
     return () => window.clearTimeout(timeoutId);
   }, [error]);
 
+  useEffect(() => {
+    if (!notice) return undefined;
+    const timeoutId = window.setTimeout(() => setNotice(""), 5000);
+    return () => window.clearTimeout(timeoutId);
+  }, [notice]);
+
   const refresh = async () => {
     try { setAnalyses(await getAnalyses()); } catch (e) { setError(e.message); }
   };
