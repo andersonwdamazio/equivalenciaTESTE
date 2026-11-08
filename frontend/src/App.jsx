@@ -3,13 +3,14 @@ import {
   Activity, ArrowDownToLine, ArrowLeft, ArrowRight, Building2, Check, CheckCircle2,
   ChevronDown, CircleHelp, Clock3, FileCheck2, FileText, GraduationCap,
   LayoutDashboard, ListChecks, LoaderCircle, Menu, Plus, Search,
-  Settings2, ShieldCheck, Sparkles, Upload, UserRound, X, LogOut, LockKeyhole, Mail,
+  Settings2, ShieldCheck, Sparkles, Upload, UserRound, X, LogOut, LockKeyhole, Mail, Moon,
 } from "lucide-react";
 import {
-  createAnalysis, decideSuggestion, downloadReport, extractHistory,
+  createAnalysisDraft, decideSuggestion, downloadReport, extractHistory,
   createStudent, getAnalysis, getAnalyses, getCourses, getMatrices, requestAiAnalysis,
   searchStudents, updateStudent, addManualSuggestion, getCandidates,
-  saveHistoryReview, getSession, getUnits, login, logout,
+  saveHistoryReview, getSession, getUnits, login, logout, updateAnalysis,
+  uploadAnalysisDocuments, removeAnalysisPlan, getWorkloadChecks,
 } from "./api";
 
 const steps = [
@@ -27,6 +28,14 @@ const emptyForm = {
   origin_status: "", target_course_id: "", target_matrix_id: "", term: "",
   history: null, plans: [],
 };
+
+function classifySituation(value) {
+  const situation = (value || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
+  if (situation.startsWith("reprovad")) return { label: "Excluída", reason: "Disciplina reprovada: não pode ser considerada para aproveitamento." };
+  if (situation.startsWith("aprovad")) return { label: "Elegível", reason: "Situação aprovada; pode seguir para análise de equivalência." };
+  if (!situation) return { label: "Bloqueada", reason: "Situação não identificada; informe aprovação antes da análise." };
+  return { label: "Bloqueada", reason: "Situação não reconhecida como aprovação; corrija antes da análise." };
+}
 
 function LoginPage({ onLogin }) {
   const [units, setUnits] = useState([]);
@@ -63,6 +72,7 @@ function LoginPage({ onLogin }) {
 function App() {
   const [user, setUser] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
+  const [darkMode, setDarkMode] = useState(() => window.localStorage.getItem("equivalencia-theme") === "dark");
   const [screen, setScreen] = useState("home");
   const [analyses, setAnalyses] = useState([]);
   const [activeId, setActiveId] = useState(null);
@@ -158,7 +168,24 @@ function App() {
     try {
       const data = await getAnalysis(id);
       setActiveId(id); setAnalysis(data);
-      setStep(data.suggestions?.length ? (data.suggestions.every((s) => s.decision !== "pending") ? 6 : 5) : 4);
+      setForm({
+        ...emptyForm,
+        student_id: String(data.student_id || ""),
+        student_name: data.student_name || "",
+        student_ra: data.student_ra || "",
+        origin_institution: data.origin_institution || "",
+        origin_course: data.origin_course || "",
+        origin_status: data.origin_status || "",
+        target_course_id: data.target_course_id ? String(data.target_course_id) : "",
+        target_matrix_id: data.target_matrix_id ? String(data.target_matrix_id) : "",
+        term: data.term || "",
+      });
+      const nextStep = !data.origin_institution || !data.origin_course || !data.origin_status ? 1
+        : !data.target_course_id || !data.target_matrix_id ? 2
+          : !data.history_name ? 3
+            : !data.extraction ? 4
+              : data.suggestions?.length ? (data.suggestions.every((s) => s.decision !== "pending") ? 6 : 5) : 5;
+      setStep(nextStep);
       setScreen("wizard");
     } catch (e) { setError(e.message); }
     finally { setBusy(false); }
@@ -170,15 +197,46 @@ function App() {
       return setError("Preencha instituição, curso e situação de origem.");
     if (step === 2 && (!form.target_course_id || !form.target_matrix_id))
       return setError("Selecione o curso e a matriz de destino.");
-    if (step === 3) {
-      if (!form.history) return setError("Anexe o histórico acadêmico para iniciar.");
+    if (step === 0) {
+      if (activeId) {
+        setBusy(true);
+        try { setAnalysis(await updateAnalysis(activeId, form)); setStep(1); }
+        catch (e) { setError(e.message); }
+        finally { setBusy(false); }
+        return;
+      }
       setBusy(true);
       try {
-        const created = await createAnalysis(form);
-        setActiveId(created.analysis_id);
-        setAnalysis(created);
+        const draft = await createAnalysisDraft(form.student_id);
+        setActiveId(draft.analysis_id);
+        setAnalysis(draft);
+        setStep(1);
+        setNotice("Análise iniciada como rascunho. Você pode completar os dados por etapas.");
+        await refresh();
+      } catch (e) { setError(e.message); }
+      finally { setBusy(false); }
+      return;
+    }
+    if (step === 1 || step === 2) {
+      setBusy(true);
+      try {
+        const saved = await updateAnalysis(activeId, form);
+        setAnalysis(saved);
+        setStep((current) => Math.min(current + 1, 6));
+        setNotice("Dados da análise salvos.");
+      } catch (e) { setError(e.message); }
+      finally { setBusy(false); }
+      return;
+    }
+    if (step === 3) {
+      if (!form.history && !analysis?.history_name) return setError("Anexe o histórico acadêmico para iniciar.");
+      setBusy(true);
+      try {
+        const saved = await uploadAnalysisDocuments(activeId, form);
+        setAnalysis(saved);
+        setForm((current) => ({ ...current, history: null, plans: [] }));
         setStep(4);
-        setNotice("Solicitação registrada. Agora a extração pode ser iniciada.");
+        setNotice("Documentos registrados. Agora a extração pode ser iniciada.");
         await refresh();
       } catch (e) { setError(e.message); }
       finally { setBusy(false); }
@@ -220,12 +278,20 @@ function App() {
     } catch (e) { setError(e.message); }
     finally { setBusy(false); }
   }
+  async function removeSavedPlan(documentId) {
+    setError(""); setNotice("");
+    try {
+      await removeAnalysisPlan(activeId, documentId);
+      setAnalysis(await getAnalysis(activeId));
+      setNotice("Plano de ensino removido da análise.");
+    } catch (e) { setError(e.message); }
+  }
 
   if (!authChecked) return <div className="auth-loading"><div className="brand-mark"><GraduationCap size={22} /></div><LoaderCircle className="spin" size={18} /> Carregando área da coordenação…</div>;
   if (!user) return <LoginPage onLogin={signIn} />;
 
   return (
-    <div className="app-shell">
+    <div className={"app-shell" + (darkMode ? " theme-dark" : "")}>
       <aside className="sidebar">
         <div className="brand"><div className="brand-mark"><GraduationCap size={22} /></div><span>equivalenc<span className="brand-accent">IA</span></span></div>
         <div className="workspace-label">{user.unit_name} <ChevronDown size={14} /></div>
@@ -246,7 +312,7 @@ function App() {
       <main className="main-area">
         <header className="topbar">
           <div className="breadcrumbs"><span>Coordenação</span><span className="crumb-slash">/</span><strong>{screen === "wizard" ? (activeId ? "Análise " + activeId : "Nova análise") : screen === "list" ? "Análises" : "Visão geral"}</strong></div>
-          <div className="topbar-actions"><span className="secure-tag"><ShieldCheck size={14} /> Área da coordenação</span><button className="icon-button" title="Sair" onClick={signOut}><LogOut size={16} /></button></div>
+          <div className="topbar-actions"><span className="secure-tag"><ShieldCheck size={14} /> Área da coordenação</span><button className={"theme-switch" + (darkMode ? " is-dark" : "")} role="switch" aria-checked={darkMode} title={darkMode ? "Ativar tema claro" : "Ativar tema escuro"} aria-label={darkMode ? "Ativar tema claro" : "Ativar tema escuro"} onClick={() => setDarkMode((current) => { const next = !current; window.localStorage.setItem("equivalencia-theme", next ? "dark" : "light"); return next; })}><Moon size={19} /><span className="theme-switch-thumb" /></button><button className="icon-button" title="Sair" onClick={signOut}><LogOut size={16} /></button></div>
         </header>
         {error && <div className="toast toast-error"><X size={16} />{error}<button onClick={() => setError("")}><X size={15} /></button></div>}
         {notice && <div className="toast toast-success"><CheckCircle2 size={16} />{notice}<button onClick={() => setNotice("")}><X size={15} /></button></div>}
@@ -272,7 +338,7 @@ function App() {
                   step === 5 ? "Confira as evidências e registre a decisão acadêmica para cada sugestão." :
                   "Gere o parecer com os itens revisados e aprovados pelo coordenador."}</p>
                 {step === 0 && <div className="student-picker">
-                  {form.student_id ? <div className="selected-student"><div className="table-avatar">{(form.student_name || "A").split(" ").map((s) => s[0]).slice(0,2).join("")}</div><div><strong>{form.student_name}</strong><small>{form.student_ra ? "RA " + form.student_ra : "RA não informado"} · cadastro reutilizável</small></div><button className="button button-quiet" onClick={() => { change("student_id", ""); setStudentSearch(""); }}>Trocar aluno</button></div> : <>
+                  {form.student_id ? <div className="selected-student"><div className="table-avatar">{(form.student_name || "A").split(" ").map((s) => s[0]).slice(0,2).join("")}</div><div><strong>{form.student_name}</strong><small>{form.student_ra ? "RA " + form.student_ra : "RA não informado"} · cadastro reutilizável</small></div><button className="button button-quiet" onClick={() => { change("student_id", ""); setStudentSearch(""); }} disabled={!!activeId}>Trocar aluno</button></div> : <>
                     <label className="field">Localizar aluno cadastrado<div className="search-box student-search"><Search size={16} /><input value={studentSearch} onChange={(e) => setStudentSearch(e.target.value)} placeholder="Buscar por nome ou RA" /></div></label>
                     <div className="student-results">{students.slice(0, 5).map((student) => <div className="student-option-row" key={student.id}><button className="student-option" onClick={() => { setForm((current) => ({ ...current, student_id: String(student.id), student_name: student.name, student_ra: student.ra || "" })); setEditingStudent(null); setNotice(""); }}><span className="table-avatar">{student.name.split(" ").map((s) => s[0]).slice(0,2).join("")}</span><span><strong>{student.name}</strong><small>{student.ra ? "RA " + student.ra : "RA não informado"}</small></span><ArrowRight size={15} /></button><button className="edit-student-button" onClick={() => { setEditingStudent({ id: student.id, name: student.name, ra: student.ra || "" }); setShowRegisterStudent(false); }}>Editar</button></div>)}</div>
                     {editingStudent && <div className="register-form field-grid"><label className="field full">Nome completo<input value={editingStudent.name} onChange={(e) => setEditingStudent({ ...editingStudent, name: e.target.value })} /></label><label className="field full">RA · opcional<input value={editingStudent.ra} onChange={(e) => setEditingStudent({ ...editingStudent, ra: e.target.value })} /></label><div className="student-edit-actions"><button className="button button-quiet" onClick={() => setEditingStudent(null)}>Cancelar</button><button className="button button-primary" onClick={saveStudentEdit} disabled={registerBusy}>{registerBusy ? <LoaderCircle className="spin" size={15} /> : <Check size={15} />} Salvar alterações</button></div></div>}
@@ -284,7 +350,12 @@ function App() {
                 </div>}
                 {step === 1 && <div className="field-grid"><label className="field">Instituição de origem<input value={form.origin_institution} onChange={(e) => change("origin_institution", e.target.value)} placeholder="Nome da instituição" /></label><label className="field">Curso de origem<input value={form.origin_course} onChange={(e) => change("origin_course", e.target.value)} placeholder="Ex.: Administração" /></label><label className="field">Situação do curso<select value={form.origin_status} onChange={(e) => change("origin_status", e.target.value)}><option value="">Selecione</option><option>Concluído</option><option>Incompleto</option><option>Trancado</option></select></label></div>}
                 {step === 2 && <div className="field-grid"><label className="field">Curso de destino<select value={form.target_course_id} onChange={(e) => { change("target_course_id", e.target.value); change("target_matrix_id", ""); }}><option value="">Selecione o curso</option>{courses.map((c) => <option key={c.id} value={c.id}>{c.name} · {c.code}</option>)}</select></label><label className="field">Matriz curricular<select value={form.target_matrix_id} onChange={(e) => change("target_matrix_id", e.target.value)} disabled={!matrices.length}><option value="">Selecione a matriz</option>{matrices.map((m) => <option key={m.id} value={m.id}>{m.code}</option>)}</select></label><label className="field">Período de ingresso<input value={form.term} onChange={(e) => change("term", e.target.value)} placeholder="Ex.: 1/2027" /></label><div className="inline-note full"><GraduationCap size={17} /><span>A matriz define as disciplinas de destino usadas na comparação. Informe o período em que o aluno ingressará na universidade.</span></div></div>}
-                {step === 3 && <div className="upload-stack"><FileDrop title="Histórico acadêmico" hint="Obrigatório · PDF ou DOCX · até 20 MB" file={form.history} onFile={(file) => change("history", file)} onRemove={() => change("history", null)} /><FileDrop title="Planos de ensino da origem" hint="Opcional · envie um ou mais PDFs/DOCX" multiple files={form.plans} onFiles={(files) => change("plans", files)} onRemove={(index) => change("plans", form.plans.filter((_, i) => i !== index))} /></div>}
+                {step === 3 && <div className="upload-stack">
+                  {analysis?.history_name && <div className="inline-note full"><FileText size={16} /><span>Histórico anexado: <strong>{analysis.history_name}</strong>. O arquivo original será preservado e não pode ser substituído.</span></div>}
+                  <FileDrop title="Histórico acadêmico" hint="Obrigatório · PDF ou DOCX · até 20 MB" file={form.history} onFile={(file) => change("history", file)} onRemove={() => change("history", null)} />
+                  {analysis?.plan_documents?.length > 0 && <div className="saved-plans"><strong>Planos já anexados</strong>{analysis.plan_documents.map((plan) => <div className="file-chip" key={plan.id}><FileText size={13} />{plan.name}{!analysis.extraction && <button type="button" className="remove-file" onClick={() => removeSavedPlan(plan.id)} aria-label={"Remover " + plan.name}><X size={13} /></button>}</div>)}</div>}
+                  <FileDrop title="Planos de ensino da origem" hint="Opcional · envie um ou mais PDFs/DOCX" multiple files={form.plans} onFiles={(files) => change("plans", files)} onRemove={(index) => change("plans", form.plans.filter((_, i) => i !== index))} />
+                </div>}
                 {step === 4 && <AnalysisPanel analysis={analysis} busy={busy} onExtract={runExtraction} onAnalyze={runAi} onReview={async (rows) => { try { const value = await saveHistoryReview(activeId, rows, true); setAnalysis(value); setNotice("Dados do histórico confirmados pelo coordenador."); } catch (e) { setError(e.message); } }} />}
                 {step === 5 && <ReviewPanel analysis={analysis} onDecision={saveDecision} onManual={async (data) => { try { setAnalysis(await addManualSuggestion(activeId, data)); setNotice("Correspondência manual adicionada à fila de revisão."); } catch (e) { setError(e.message); } }} />}
                 {step === 6 && <ReportPreview analysis={analysis} note={coordinatorNote} setNote={setCoordinatorNote} busy={busy} onDownload={makeReport} />}
@@ -360,11 +431,40 @@ function AnalysisPanel({ analysis, busy, onExtract, onAnalyze, onReview }) {
     {!analysis.extraction ? <div className="ai-prep"><div className="ai-orb"><Sparkles size={21} /></div><h3>Pronto para analisar o histórico</h3><p>O sistema primeiro lê os dados estruturados. Quando o agente de equivalências estiver conectado, ele receberá essas disciplinas, os planos de ensino e a matriz de destino.</p><button className="button button-primary" onClick={onExtract} disabled={busy}>{busy ? <LoaderCircle className="spin" size={16} /> : <Sparkles size={16} />} Ler histórico</button><div className="ai-contract"><span className="contract-dot" /> Integração preparada · agente de IA ainda não configurado</div></div> : <>
       {analysis.extraction.warning && <div className="inline-warning">{analysis.extraction.warning}</div>}
       <div className="table-heading"><div><strong>Disciplinas identificadas</strong><span>{rows.length} itens · revise antes de confirmar</span></div><span className="tag tag-neutral">Leitura de documento</span></div>
-      <div className="editable-table-wrap"><table className="editable-table"><thead><tr><th>DISCIPLINA</th><th>CÓDIGO</th><th>CARGA</th><th>SITUAÇÃO</th></tr></thead><tbody>{edited.map((r, i) => <tr key={r.id || i}><td><input value={r.name || ""} onChange={(e) => setEdited(edited.map((x, ix) => ix === i ? { ...x, name: e.target.value } : x))} /></td><td><input value={r.code || ""} onChange={(e) => setEdited(edited.map((x, ix) => ix === i ? { ...x, code: e.target.value } : x))} /></td><td><input value={r.hours || ""} onChange={(e) => setEdited(edited.map((x, ix) => ix === i ? { ...x, hours: e.target.value } : x))} /></td><td><input value={r.status || ""} onChange={(e) => setEdited(edited.map((x, ix) => ix === i ? { ...x, status: e.target.value } : x))} /></td></tr>)}</tbody></table></div>
+      <div className="editable-table-wrap"><table className="editable-table"><thead><tr><th>DISCIPLINA</th><th>CÓDIGO</th><th>NOTA</th><th>CARGA</th><th>ANO/SEMESTRE</th><th>SITUAÇÃO</th></tr></thead><tbody>{edited.map((r, i) => <tr key={r.id || i}><td><input aria-label="Disciplina" value={r.name || ""} onChange={(e) => setEdited(edited.map((x, ix) => ix === i ? { ...x, name: e.target.value } : x))} /></td><td><input aria-label="Código" value={r.code || ""} onChange={(e) => setEdited(edited.map((x, ix) => ix === i ? { ...x, code: e.target.value } : x))} /></td><td><input aria-label="Nota" value={r.grade || ""} onChange={(e) => setEdited(edited.map((x, ix) => ix === i ? { ...x, grade: e.target.value } : x))} /></td><td><input aria-label="Carga horária" value={r.hours || ""} onChange={(e) => setEdited(edited.map((x, ix) => ix === i ? { ...x, hours: e.target.value } : x))} /></td><td><input aria-label="Ano/semestre" value={r.period || ""} onChange={(e) => setEdited(edited.map((x, ix) => ix === i ? { ...x, period: e.target.value } : x))} /></td><td><input aria-label="Situação" value={r.status || ""} onChange={(e) => setEdited(edited.map((x, ix) => ix === i ? { ...x, status: e.target.value } : x))} /></td></tr>)}</tbody></table></div>
       <button className="button button-secondary save-review" onClick={() => onReview(edited)} disabled={!rows.length || busy}>{busy ? <LoaderCircle className="spin" size={15} /> : <Check size={15} />} Confirmar dados extraídos</button>
+      {analysis.extraction.confirmed && <>
+        <div className="table-heading"><div><strong>Validação da situação acadêmica</strong><span>Somente disciplinas aprovadas podem seguir para aproveitamento.</span></div></div>
+        <div className="editable-table-wrap"><table className="preview-table"><thead><tr><th>DISCIPLINA</th><th>SITUAÇÃO</th><th>RESULTADO</th><th>MOTIVO</th></tr></thead><tbody>{rows.map((row) => { const result = classifySituation(row.status); return <tr key={row.id}><td>{row.name || "Nome não identificado"}</td><td>{row.status || "Não identificada"}</td><td>{result.label}</td><td>{result.reason}</td></tr>; })}</tbody></table></div>
+        <WorkloadPanel analysisId={analysis.id} />
+      </>}
       <div className="ai-next"><div><Sparkles size={17} /><span><strong>Sugestões de equivalência por IA</strong><small>O agente poderá comparar ementas, conteúdos e carga horária.</small></span></div><button className="button button-primary" onClick={onAnalyze} disabled={!analysis.extraction.confirmed || busy} title={!analysis.extraction.confirmed ? "Confirme os dados extraídos para continuar" : ""}>Solicitar análise <ArrowRight size={15} /></button></div>
     </>}
   </div>;
+}
+function WorkloadPanel({ analysisId }) {
+  const [checks, setChecks] = useState([]);
+  const [sourceId, setSourceId] = useState("");
+  const [targetId, setTargetId] = useState("");
+  const [error, setError] = useState("");
+  useEffect(() => { getWorkloadChecks(analysisId).then(setChecks).catch((e) => setError(e.message)); }, [analysisId]);
+  const sources = [...new Map(checks.map((item) => [item.source.id, item.source])).values()];
+  const targets = [...new Map(checks.map((item) => [item.target.id, item.target])).values()];
+  const selected = checks.find((item) => String(item.source.id) === sourceId && String(item.target.id) === targetId);
+  const met = checks.filter((item) => item.attended === true).length;
+  const unmet = checks.filter((item) => item.attended === false).length;
+  useEffect(() => {
+    const firstSource = checks[0]?.source;
+    const firstTarget = checks[0]?.target;
+    if (!sourceId && firstSource) setSourceId(String(firstSource.id));
+    if (!targetId && firstTarget) setTargetId(String(firstTarget.id));
+  }, [checks, sourceId, targetId]);
+  return <section className="workload-panel"><div className="table-heading"><div><strong>Conferência da carga horária</strong><span>{checks.length ? `${met} combinações atendem · ${unmet} não atendem` : "Compare uma disciplina de origem com a matriz selecionada."}</span></div></div>
+    {error ? <div className="inline-warning">{error}</div> : !checks.length ? <div className="empty-stage"><strong>Nenhuma comparação disponível</strong><span>Confirme as disciplinas aprovadas e confira se há disciplinas cadastradas na matriz de destino.</span></div> : <>
+      <div className="field-grid"><label className="field">Disciplina de origem<select value={sourceId} onChange={(e) => setSourceId(e.target.value)}>{sources.map((item) => <option key={item.id} value={item.id}>{item.name || "Nome não identificado"} · {item.hours || "carga não identificada"}h</option>)}</select></label><label className="field">Disciplina de destino<select value={targetId} onChange={(e) => setTargetId(e.target.value)}>{targets.map((item) => <option key={item.id} value={item.id}>{item.name} · {item.hours}h</option>)}</select></label></div>
+      {selected && <div className={selected.attended === true ? "workload-result workload-pass" : selected.attended === false ? "workload-result workload-fail" : "workload-result workload-unknown"}><strong>{selected.attended === true ? "Critério atendido" : selected.attended === false ? "Critério não atendido" : "Carga horária não confirmada"}</strong><span>{selected.source_hours ?? "Não identificada"} h de origem → {selected.target_hours ?? "Não identificada"} h na UNIPAR. {selected.reason}</span></div>}
+    </>}
+  </section>;
 }
 function ReviewPanel({ analysis, onDecision, onManual }) {
   const suggestions = analysis?.suggestions || [];
